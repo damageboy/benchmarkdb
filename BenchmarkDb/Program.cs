@@ -81,8 +81,8 @@ namespace BenchmarkDb
             var lotsofbackspaces = String.Join("", Enumerable.Repeat("\b", 80));
             var lotsofspaces = String.Join("", Enumerable.Repeat(" ", 80));
 
-            var tasks = mode == "async" ?
-               Enumerable.Range(1, NumTasks).Select(_ => Task.Factory.StartNew(DoWork, TaskCreationOptions.LongRunning)).ToList() :
+            var tasks = mode == "sync" ?
+               Enumerable.Range(1, NumTasks).Select(_ => Task.Factory.StartNew(DoWorkSync, TaskCreationOptions.LongRunning)).ToList() :
                Enumerable.Range(1, NumTasks).Select(_ => Task.Factory.StartNew(DoWorkAsync, TaskCreationOptions.LongRunning).Unwrap()).ToList();
 
             Task.Run(async () =>
@@ -128,23 +128,21 @@ namespace BenchmarkDb
  
             async Task DoWorkAsync()
             {
+                var results = new List<Fortune>();
+                using (var connection = factory.CreateConnection())
+                {
+                            connection.ConnectionString = connectionString;
+                            await connection.OpenAsync();
+                            using (var command = connection.CreateCommand()) {
+                            command.CommandText = "SELECT id,message FROM fortune";
+                            command.Prepare();
                 while (!Stopping)
                 {
                     Interlocked.Add(ref Counter, 1);
 
                     try
                     {
-                        var results = new List<Fortune>();
 
-                        using (var connection = factory.CreateConnection())
-                        {
-                            var command = connection.CreateCommand();
-                            command.CommandText = "SELECT id,message FROM fortune";
-
-                            connection.ConnectionString = connectionString;
-                            await connection.OpenAsync();
-
-                            command.Prepare();
 
                             using (var reader = await command.ExecuteReaderAsync())
                             {
@@ -157,41 +155,40 @@ namespace BenchmarkDb
                                     });
                                 }
                             }
-                        }
 
                         if (results.Count() != 12)
                         {
                             throw new ApplicationException("Not 12");
                         }
-
+                        results.Clear();
                     }
+
                     catch (Exception e)
                     {
                         Console.WriteLine(e.Message);
                     }
-                }
+                } // Stopping
+                } // Command
+                } // Connection
             }
 
 
-            void DoWork()
+            void DoWorkSync()
             {
+                var results = new List<Fortune>();
+                using (var connection = factory.CreateConnection())
+                {
+                    connection.ConnectionString = connectionString;
+                    connection.Open();
+                            using (var command = connection.CreateCommand()) { 
+                            command.CommandText = "SELECT id,message FROM fortune";
+                            command.Prepare();
                 while (!Stopping)
                 {
                     Interlocked.Add(ref Counter, 1);
 
                     try
                     {
-                        var results = new List<Fortune>();
-
-                        using (var connection = factory.CreateConnection())
-                        {
-                            var command = connection.CreateCommand();
-                            command.CommandText = "SELECT id,message FROM fortune";
-
-                            connection.ConnectionString = connectionString;
-                            connection.Open();
-
-                            command.Prepare();
 
                             using (var reader = command.ExecuteReader())
                             {
@@ -204,12 +201,12 @@ namespace BenchmarkDb
                                     });
                                 }
                             }
-                        }
 
                         if (results.Count() != 12)
                         {
                             throw new ApplicationException("Not 12");
                         }
+                        results.Clear();
 
                     }
                     catch (Exception e)
@@ -217,6 +214,8 @@ namespace BenchmarkDb
                         Console.WriteLine(e.Message);
                     }
                 }
+                        } // Command
+                        } // Connection
             }
         }
 
