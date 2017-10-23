@@ -95,6 +95,9 @@ namespace BenchmarkDb
                 case "sync+conn+cmd":
                     tasks = Enumerable.Range(1, NumTasks).Select(_ => Task.Factory.StartNew(DoWorkSyncKeepConnKeepCmd, TaskCreationOptions.LongRunning)).ToList();
                     break;
+                case "sync+conn+cmd+prealloc":
+                    tasks = Enumerable.Range(1, NumTasks).Select(_ => Task.Factory.StartNew(DoWorksyncKeepConnKeepCmdPreallocResults, TaskCreationOptions.LongRunning)).ToList();
+                    break;
                 case "async":
                     tasks = Enumerable.Range(1, NumTasks).Select(_ => Task.Factory.StartNew(DoWorkAsync, TaskCreationOptions.LongRunning).Unwrap()).ToList();
                     break;
@@ -103,6 +106,9 @@ namespace BenchmarkDb
                     break;
                 case "async+conn+cmd":
                     tasks = Enumerable.Range(1, NumTasks).Select(_ => Task.Factory.StartNew(DoWorkAsyncKeepConnKeepCmd, TaskCreationOptions.LongRunning).Unwrap()).ToList();
+                    break;
+                case "async+conn+cmd+prealloc":
+                    tasks = Enumerable.Range(1, NumTasks).Select(_ => Task.Factory.StartNew(DoWorkAsyncKeepConnKeepCmdPreallocResults, TaskCreationOptions.LongRunning).Unwrap()).ToList();
                     break;
                 default:
                     throw new Exception($"Unknown benchmark mode {mode} requesgted");
@@ -291,6 +297,49 @@ namespace BenchmarkDb
                     } // Stopping
                 }
             }
+
+            async Task DoWorkAsyncKeepConnKeepCmdPreallocResults()
+            {
+                var results = Enumerable.Range(0, 12).Select(_ => new Fortune()).ToList();
+                using (var connection = factory.CreateConnection())
+                using (var command = connection.CreateCommand())
+                {
+                    connection.ConnectionString = connectionString;
+                    await connection.OpenAsync();
+                    command.CommandText = "SELECT id,message FROM fortune";
+                    command.Prepare();
+                    while (!Stopping)
+                    {
+                        Interlocked.Add(ref _counter, 1);
+
+                        try
+                        {
+                            var idx = 0;
+                            using (var reader = await command.ExecuteReaderAsync())
+                            {
+                                while (await reader.ReadAsync())
+                                {
+                                    var r = results[idx++];
+                                    r.Id = reader.GetInt32(0);
+                                    r.Message = reader.GetString(1);
+                                }
+                            }
+
+                            if (idx != 12)
+                            {
+                                throw new ApplicationException("Not 12");
+                            }
+                            results.Clear();
+                        }
+
+                        catch (Exception e)
+                        {
+                            Console.WriteLine(e.Message);
+                        }
+                    } // Stopping
+                }
+            }
+
             void DoWorkSync()
             {
                 var results = new List<Fortune>();
@@ -426,7 +475,51 @@ namespace BenchmarkDb
                     }
                 }
             }
+            void DoWorksyncKeepConnKeepCmdPreallocResults()
+            {
+                var results = Enumerable.Range(0, 12).Select(_ => new Fortune()).ToList();
+                using (var connection = factory.CreateConnection())
+                using (var command = connection.CreateCommand())
+                {
+                    connection.ConnectionString = connectionString;
+                    connection.Open();
+                    command.CommandText = "SELECT id,message FROM fortune";
+                    command.Prepare();
+                    while (!Stopping)
+                    {
+                        Interlocked.Add(ref _counter, 1);
+
+                        try
+                        {
+                            var idx = 0;
+                            using (var reader = command.ExecuteReader())
+                            {
+
+
+                                while (reader.Read())
+                                {
+                                    var r = results[idx++];
+                                    r.Id = reader.GetInt32(0);
+                                    r.Message = reader.GetString(1);
+                                }
+                            }
+
+                            if (idx != 12)
+                            {
+                                throw new ApplicationException("Not 12");
+                            }
+                            results.Clear();
+                        }
+
+                        catch (Exception e)
+                        {
+                            Console.WriteLine(e.Message);
+                        }
+                    } // Stopping
+                }
+            }
         }
+
 
 
     }
