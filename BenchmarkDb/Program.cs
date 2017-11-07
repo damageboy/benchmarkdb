@@ -152,9 +152,10 @@ namespace BenchmarkDb
             Console.WriteLine($"{tasks.Count:D2} Threads, tps: {totalTps:F2}, stddev(w/o best+worst): {stddev:F2}");
 
             using (var sw = File.AppendText("results.md"))
-            {
                 sw.WriteLine($"|{mode}|{tasks.Count:D2}|{totalTps:F0}|{stddev:F0}|");
-            }
+
+            using (var sw = File.AppendText("results.csv"))
+                sw.WriteLine($"{mode},{tasks.Count:D2},{totalTps:F0},{stddev:F0}");
 
             double CalculateStdDev(IEnumerable<double> values, int count)
             {
@@ -235,7 +236,7 @@ namespace BenchmarkDb
                                         results.Add(new Fortune
                                         {
                                             Id = reader.GetInt32(0),
-                                            Message = reader.GetString(1)
+                                            Message = reader.GetString(1),
                                         });
                                     }
                                 }
@@ -300,7 +301,7 @@ namespace BenchmarkDb
 
             async Task DoWorkAsyncKeepConnKeepCmdPreallocResults()
             {
-                var results = Enumerable.Range(0, 12).Select(_ => new Fortune()).ToList();
+                var results = Enumerable.Range(0, 12).Select(_ => new Fortune()).ToArray();
                 using (var connection = factory.CreateConnection())
                 using (var command = connection.CreateCommand())
                 {
@@ -310,7 +311,7 @@ namespace BenchmarkDb
                     command.Prepare();
                     while (!Stopping)
                     {
-                        Interlocked.Add(ref _counter, 1);
+                        Interlocked.Increment(ref _counter);
 
                         try
                         {
@@ -329,14 +330,13 @@ namespace BenchmarkDb
                             {
                                 throw new ApplicationException("Not 12");
                             }
-                            results.Clear();
                         }
 
                         catch (Exception e)
                         {
                             Console.WriteLine(e.Message);
                         }
-                    } // Stopping
+                    }
                 }
             }
 
@@ -477,7 +477,7 @@ namespace BenchmarkDb
             }
             void DoWorksyncKeepConnKeepCmdPreallocResults()
             {
-                var results = Enumerable.Range(0, 12).Select(_ => new Fortune()).ToList();
+                var results = Enumerable.Range(0, 12).Select(_ => new Fortune()).ToArray();
                 using (var connection = factory.CreateConnection())
                 using (var command = connection.CreateCommand())
                 {
@@ -494,8 +494,6 @@ namespace BenchmarkDb
                             var idx = 0;
                             using (var reader = command.ExecuteReader())
                             {
-
-
                                 while (reader.Read())
                                 {
                                     var r = results[idx++];
@@ -508,7 +506,6 @@ namespace BenchmarkDb
                             {
                                 throw new ApplicationException("Not 12");
                             }
-                            results.Clear();
                         }
 
                         catch (Exception e)
@@ -519,9 +516,6 @@ namespace BenchmarkDb
                 }
             }
         }
-
-
-
     }
 
     public class Fortune
