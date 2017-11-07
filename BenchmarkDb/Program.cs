@@ -70,6 +70,7 @@ namespace BenchmarkDb
             var mode = args[3];
             var seconds = int.Parse(args[4]);
             var delay = seconds * 1000;
+            var desc = args[5];
 
             Console.WriteLine($"{args[0]}: {mode} mode");
 
@@ -152,10 +153,10 @@ namespace BenchmarkDb
             Console.WriteLine($"{tasks.Count:D2} Threads, tps: {totalTps:F2}, stddev(w/o best+worst): {stddev:F2}");
 
             using (var sw = File.AppendText("results.md"))
-                sw.WriteLine($"|{mode}|{tasks.Count:D2}|{totalTps:F0}|{stddev:F0}|");
+                sw.WriteLine($"|{desc}|{mode}|{tasks.Count:D2}|{totalTps:F0}|{stddev:F0}|");
 
             using (var sw = File.AppendText("results.csv"))
-                sw.WriteLine($"{mode},{tasks.Count:D2},{totalTps:F0},{stddev:F0}");
+                sw.WriteLine($"{desc},{mode},{tasks.Count:D2},{totalTps:F0},{stddev:F0}");
 
             double CalculateStdDev(IEnumerable<double> values, int count)
             {
